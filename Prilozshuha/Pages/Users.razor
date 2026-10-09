@@ -1,0 +1,90 @@
+﻿@page "/users"
+@using Prilozshuha.ApiRequests
+@using Prilozshuha.ApiRequests.Models
+@using Prilozshuha.ApiRequests.Services
+@inject ApiRequestService ApiRequests
+@inject UserService UserService
+
+<PageTitle>Управление пользователями</PageTitle>
+
+<div class="top-bar">
+    <h1>🛠 Панель администратора</h1>
+    <button class="btn btn-primary" @onclick="ShowAddForm">➕ Добавить</button>
+</div>
+
+@if (!UserService.IsAuthenticated || !UserService.IsAdmin)
+{
+    <div class="alert alert-danger">🔒 Доступ запрещён. Требуются права администратора.</div>
+}
+else
+{
+    @if (showForm)
+    {
+        <div class="card mb-4">
+            <h3>@(isEditing ? "Редактирование" : "Новый пользователь")</h3>
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div class="alert alert-@(success ? "success" : "danger")">@message</div>
+            }
+            <div class="grid grid-cols-2">
+                <div class="form-group"><label class="form-label">Имя</label><input class="form-control" @bind="newUser.Name" /></div>
+                <div class="form-group"><label class="form-label">Email</label><input class="form-control" @bind="newUser.Email" /></div>
+                <div class="form-group"><label class="form-label">Пароль</label><input type="password" class="form-control" @bind="newUser.Password" /></div>
+                <div class="form-group"><label class="form-label">О себе</label><input class="form-control" @bind="newUser.Description" /></div>
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button class="btn btn-primary" @onclick="SaveAdd">💾 Сохранить</button>
+                <button class="btn btn-secondary" @onclick="CancelForm">Отмена</button>
+            </div>
+        </div>
+    }
+
+    <div class="table-container">
+        <table>
+            <thead><tr><th>ID</th><th>Имя</th><th>Email</th><th>Роль</th><th>Действия</th></tr></thead>
+            <tbody>
+                @if (users == null)
+                {
+                    <tr><td colspan="5" class="text-center">⏳ Загрузка...</td></tr>
+                }
+                else if (!users.Any())
+                {
+                    <tr><td colspan="5" class="text-center">📭 Нет пользователей</td></tr>
+                }
+                else
+                {
+                    @foreach (var u in users)
+                    {
+                        <tr>
+                            <td>@u.id_User</td>
+                            <td>@u.Name</td>
+                            <td>@u.Email</td>
+                            <td>@u.Role</td>
+                            <td class="flex gap-2">
+                                <button class="btn btn-sm btn-secondary" @onclick="() => EditUser(u)">✏️</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteUser(u.id_User)">🗑️</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<UserDataShort>? users;
+    private bool showForm = false;
+    private bool isEditing = false;
+    private string message = "";
+    private bool success = false;
+    private ReqDataUser newUser = new();
+
+    protected override async Task OnInitializedAsync() { await LoadUsers(); }
+    private async Task LoadUsers() { var r = await ApiRequests.GetAllUsersAsync(); users = r?.data?.users ?? new(); }
+    private void ShowAddForm() { isEditing = false; newUser = new(); message = ""; showForm = true; }
+    private void EditUser(UserDataShort u) { isEditing = true; newUser = new() { Name = u.Name, Email = u.Email, Description = u.Description }; showForm = true; }
+    private void CancelForm() { showForm = false; message = ""; }
+    private async Task SaveAdd() { var r = await ApiRequests.CreateNewUserAndLoginAsync(newUser); message = r.message; success = r.status; if (r.status) await LoadUsers(); StateHasChanged(); }
+    private async Task DeleteUser(int id) { var r = await ApiRequests.DeleteUserAsync(id); if (r) await LoadUsers(); }
+}

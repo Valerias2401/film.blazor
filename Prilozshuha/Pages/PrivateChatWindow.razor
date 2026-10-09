@@ -1,0 +1,385 @@
+﻿@using Prilozshuha.ApiRequests
+@using Prilozshuha.ApiRequests.Services
+@using Prilozshuha.ApiRequests.Models
+@inject ChatService ChatService
+@inject UserService UserService
+@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="chat-window">
+    <div class="chat-header">
+        <h4>💬 Личный чат: @WithUserName</h4>
+        <button class="btn-close" @onclick="CloseChat">✕</button>
+    </div>
+
+    <div class="chat-body" id="chatBody">
+        @if (!ChatService.Messages.Any())
+        {
+            <div class="empty-chat">Сообщений пока нет. Напиши первым!</div>
+        }
+        else
+        {
+            @foreach (var msg in ChatService.Messages)
+            {
+                <div class="message @(msg.isOwn ? "message-own" : "message-other")">
+                    <div class="message-info">
+                        <strong>@msg.fromUserName</strong>
+                        <span class="time">@msg.createdAt.ToLocalTime().ToString("HH:mm")</span>
+                        @if (msg.isEdited)
+                        {
+                            <small class="edited">(изменено)</small>
+                        }
+                    </div>
+                    @if (!string.IsNullOrEmpty(msg.photoUrl))
+                    {
+                        <img src="@msg.photoUrl" class="msg-photo" alt="photo" />
+                    }
+                    <div class="message-text">@msg.content</div>
+                    @if (UserService.IsAdmin || msg.isOwn)
+                    {
+                        <div class="message-actions">
+                            @if (!isEditing || editingId != msg.messageId)
+                            {
+                                <span class="action-btn" @onclick="() => StartEdit(msg)">✏️</span>
+                                <span class="action-btn danger" @onclick="() => DeleteMsg(msg.messageId)">🗑️</span>
+                            }
+                            else
+                            {
+                                <div class="edit-mode">
+                                    <input @bind="editText" class="form-control-sm" />
+                                    <button class="btn-sm btn-success" @onclick="() => SaveEdit(msg.messageId)">💾</button>
+                                    <button class="btn-sm btn-secondary" @onclick="CancelEdit">❌</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+
+    <div class="chat-footer">
+        <input type="text" class="form-control" placeholder="Сообщение..." @bind="newMessage" @onkeypress="HandleEnter" />
+        <input type="text" class="form-control photo-url-input" placeholder="URL фото (необязательно)" @bind="newPhotoUrl" />
+        <button class="btn-send" @onclick="SendMessage">🚀</button>
+    </div>
+</div>
+
+<style>
+    .chat-window {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        font-family: sans-serif;
+    }
+
+    .chat-header {
+        padding: 15px;
+        background: #2c3e50;
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+        .chat-header h4 {
+            margin: 0;
+            font-size: 1.2rem;
+        }
+
+    .btn-close {
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+
+        .btn-close:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+    .chat-body {
+        flex: 1;
+        padding: 15px;
+        overflow-y: auto;
+        background: #f8f9fa;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .empty-chat {
+        text-align: center;
+        color: #888;
+        margin-top: 40%;
+    }
+
+    .message {
+        margin-bottom: 10px;
+        padding: 10px;
+        border-radius: 8px;
+        position: relative;
+        max-width: 80%;
+    }
+
+    .message-own {
+        background: #d1e7dd;
+        align-self: flex-end;
+        margin-left: auto;
+    }
+
+    .message-other {
+        background: #ffffff;
+        border: 1px solid #ddd;
+        align-self: flex-start;
+        margin-right: auto;
+    }
+
+    .message-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        margin-bottom: 5px;
+        color: #555;
+    }
+
+    .message-own .message-info {
+        color: #333;
+    }
+
+    .msg-photo {
+        max-width: 100%;
+        border-radius: 5px;
+        margin-top: 5px;
+        max-height: 200px;
+        object-fit: cover;
+    }
+
+    .message-text {
+        word-break: break-word;
+    }
+
+    .message-actions {
+        display: flex;
+        gap: 5px;
+        margin-top: 5px;
+        justify-content: flex-end;
+    }
+
+    .action-btn {
+        cursor: pointer;
+        font-size: 12px;
+        opacity: 0.7;
+        padding: 2px 5px;
+        border-radius: 4px;
+    }
+
+        .action-btn:hover {
+            opacity: 1;
+            background: rgba(0,0,0,0.05);
+        }
+
+        .action-btn.danger {
+            color: red;
+        }
+
+    .edit-mode {
+        display: flex;
+        gap: 5px;
+        margin-top: 5px;
+    }
+
+    .chat-footer {
+        padding: 10px;
+        background: white;
+        border-top: 1px solid #eee;
+        display: flex;
+        gap: 5px;
+        align-items: center;
+    }
+
+    .photo-url-input {
+        width: 150px;
+        font-size: 12px;
+    }
+
+    .btn-send {
+        background: #2c3e50;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+        .btn-send:hover {
+            background: #1a252f;
+        }
+</style>
+
+@code {
+    [Parameter] public int WithUserId { get; set; }
+    [Parameter] public string WithUserName { get; set; } = "Пользователь";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string newMessage = "";
+    private string newPhotoUrl = "";
+    private bool isEditing = false;
+    private int editingId = 0;
+    private string editText = "";
+    private bool isInitialized = false;
+    private bool isLoading = false;
+    private bool isSending = false;
+    private int lastWithUserId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            ChatService.OnMessagesUpdated += OnMessagesUpdated;
+
+            if (UserService.CurrentUser == null)
+            {
+                Console.WriteLine("CurrentUser is null, cannot connect to chat");
+                return;
+            }
+
+            ChatService.SetCurrentUserId(UserService.CurrentUser.id_User);
+            await ChatService.Connect();
+
+            isInitialized = true;
+            await LoadChat();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in OnInitializedAsync: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (isInitialized && WithUserId > 0 && WithUserId != lastWithUserId)
+        {
+            await LoadChat();
+        }
+    }
+
+    private async Task LoadChat()
+    {
+        if (isLoading) return;
+        isLoading = true;
+
+        try
+        {
+            lastWithUserId = WithUserId;
+            await ChatService.LoadPrivateMessages(WithUserId);
+            await ChatService.JoinPrivateChat(WithUserId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in LoadChat: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void OnMessagesUpdated()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage)) return;
+        if (isSending) return;
+
+        isSending = true;
+
+        try
+        {
+            if (UserService.CurrentUser == null)
+            {
+                Console.WriteLine("CurrentUser is null, cannot send message");
+                return;
+            }
+
+            if (!ChatService.IsConnected)
+            {
+                Console.WriteLine("Reconnecting to SignalR...");
+                await ChatService.Connect();
+                await Task.Delay(500);
+            }
+
+            await ChatService.SendMessage(null, WithUserId, newMessage, string.IsNullOrWhiteSpace(newPhotoUrl) ? null : newPhotoUrl);
+            newMessage = "";
+            newPhotoUrl = "";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Send error: {ex.Message}");
+        }
+        finally
+        {
+            isSending = false;
+        }
+    }
+
+    private async Task HandleEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SendMessage();
+    }
+
+    private void StartEdit(MessageModel msg)
+    {
+        isEditing = true;
+        editingId = msg.messageId;
+        editText = msg.content;
+    }
+
+    private void CancelEdit()
+    {
+        isEditing = false;
+        editingId = 0;
+        editText = "";
+    }
+
+    private async Task SaveEdit(int id)
+    {
+        await ChatService.EditMessage(id, editText);
+        CancelEdit();
+    }
+
+    private async Task DeleteMsg(int id)
+    {
+        if (await JS.InvokeAsync<bool>("confirm", "Удалить сообщение?"))
+        {
+            await ChatService.DeleteMessage(id);
+        }
+    }
+
+    private async Task CloseChat()
+    {
+        ChatService.ClearMessages();
+        await OnClose.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        ChatService.OnMessagesUpdated -= OnMessagesUpdated;
+    }
+}

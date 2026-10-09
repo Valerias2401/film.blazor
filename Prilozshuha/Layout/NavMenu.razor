@@ -1,0 +1,71 @@
+﻿@using Prilozshuha.ApiRequests.Services
+@inject UserService UserService
+@inject NavigationManager Navigation
+
+<div class="mb-4">
+    <h3 class="text-center" style="font-weight:700; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        🎬 Prilozshuha
+    </h3>
+</div>
+
+<nav class="flex flex-column gap-2">
+    <NavLink class="btn btn-secondary w-full justify-start" href="" Match="NavLinkMatch.All">
+        🏠 Главная
+    </NavLink>
+
+    <NavLink class="btn btn-secondary w-full justify-start" href="movies">
+        🎥 Фильмы
+    </NavLink>
+
+    @if (!UserService.IsAuthenticated)
+    {
+        <div class="mt-4"></div>
+        <NavLink class="btn btn-primary w-full justify-center" href="login">Войти</NavLink>
+        <NavLink class="btn btn-secondary w-full justify-center" href="register">Регистрация</NavLink>
+    }
+    else
+    {
+        <!-- КНОПКА ЧАТОВ - ДЛЯ ВСЕХ АВТОРИЗОВАННЫХ ПОЛЬЗОВАТЕЛЕЙ -->
+        <NavLink class="btn btn-secondary w-full justify-start" href="userschat">
+            💬 Чаты
+        </NavLink>
+
+        <div class="card mt-4" style="background:#f8fafc; border:none; padding:12px;">
+            <div style="font-size:0.85rem; color:var(--text-muted);">Вы вошли как:</div>
+            <div style="font-weight:600; word-break:break-word;">@UserService.CurrentUser?.Name</div>
+        </div>
+
+        <NavLink class="btn btn-secondary w-full justify-start" href="profile">
+            👤 Профиль
+        </NavLink>
+
+        @if (UserService.IsAdmin)
+        {
+            <NavLink class="btn btn-secondary w-full justify-start" href="users">
+                🛠 Админка
+            </NavLink>
+        }
+
+        <button class="btn btn-danger w-full mt-4" @onclick="Logout">
+            🚪 Выйти
+        </button>
+    }
+</nav>
+
+@code {
+    protected override void OnInitialized()
+    {
+        UserService.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+        UserService.OnChange -= StateHasChanged;
+    }
+
+    private void Logout()
+    {
+        UserService.ClearCurrentUser();
+        Navigation.NavigateTo("/");
+    }
+}

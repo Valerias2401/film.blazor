@@ -1,0 +1,100 @@
+﻿@page "/login"
+@using Prilozshuha.ApiRequests
+@using Prilozshuha.ApiRequests.Models
+@using Prilozshuha.ApiRequests.Services
+@inject ApiRequestService ApiRequests
+@inject UserService UserService
+@inject NavigationManager Navigation
+
+<PageTitle>Вход</PageTitle>
+
+<div class="auth-wrapper">
+    <div class="auth-card card animate-fade">
+        <div class="text-center mb-4">
+            <h2 class="mb-1">👋 Вход</h2>
+            <p class="text-muted">Рады видеть тебя снова!</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger text-center">@errorMessage</div>
+        }
+
+        <div class="form-group mb-3">
+            <label class="form-label">📧 Email</label>
+            <input class="form-control" @bind="email" placeholder="name@example.com" />
+        </div>
+        <div class="form-group mb-4">
+            <label class="form-label">🔒 Пароль</label>
+            <input type="password" class="form-control" @bind="password" placeholder="••••••••" />
+        </div>
+
+        <button class="btn btn-primary w-full py-2 mb-3" @onclick="HandleLogin">Войти</button>
+
+        <div class="text-center">
+            <a href="/register" class="text-decoration-none fw-bold text-primary">Нет аккаунта? Создать ✨</a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .auth-wrapper {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .auth-card {
+        width: 100%;
+        max-width: 450px;
+        border-radius: 30px;
+        padding: 40px;
+    }
+
+    .animate-fade {
+        animation: fadeIn 0.5s ease-out;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private string errorMessage = "";
+
+    private async Task HandleLogin()
+    {
+        var result = await ApiRequests.LoginAsync(new() { Email = email, Password = password });
+
+        if (result.status)
+        {
+            UserService.SetCurrentUser(new()
+            {
+                id_User = result.userId,
+                Name = result.userName,
+                Description = result.description,
+                Role = result.role
+            });
+
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            errorMessage = "Неверный логин или пароль";
+            StateHasChanged();
+        }
+    }
+}

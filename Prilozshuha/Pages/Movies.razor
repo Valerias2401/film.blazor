@@ -1,0 +1,524 @@
+﻿@page "/Movies"
+@using Prilozshuha.ApiRequests
+@using Prilozshuha.ApiRequests.Models
+@using Prilozshuha.ApiRequests.Services
+@inject MovieRequests MovieRequests
+@inject UserService UserService
+@inject ChatService ChatService
+
+<PageTitle>Фильмы</PageTitle>
+
+<div class="top-bar">
+    <h1>🎬 Каталог фильмов</h1>
+    @if (UserService.IsAdmin)
+    {
+        <button class="btn btn-primary" @onclick="ShowAddForm">➕ Добавить</button>
+    }
+</div>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert alert-@(isSuccess ? "success" : "danger")">@message</div>
+}
+
+@if (showForm)
+{
+    <div class="card mb-4">
+        <h3>@(isEditing ? "Редактировать" : "Добавить") фильм</h3>
+        <div class="grid grid-cols-2">
+            <div class="form-group"><label class="form-label">Название</label><input class="form-control" @bind="form.title" /></div>
+            <div class="form-group"><label class="form-label">Жанр</label><input class="form-control" @bind="form.genre" /></div>
+            <div class="form-group"><label class="form-label">Год</label><input type="number" class="form-control" @bind="form.releaseYear" /></div>
+            <div class="form-group"><label class="form-label">Рейтинг</label><input type="number" step="0.1" class="form-control" @bind="form.rating" /></div>
+            <div class="form-group" style="grid-column: span 2;"><label class="form-label">Описание</label><textarea class="form-control" rows="3" @bind="form.description"></textarea></div>
+            <div class="form-group" style="grid-column: span 2;"><label class="form-label">URL постера</label><input class="form-control" @bind="form.posterUrl" /></div>
+        </div>
+        <div class="flex gap-2 mt-4">
+            <button class="btn btn-primary" @onclick="SaveMovie">💾 Сохранить</button>
+            <button class="btn btn-secondary" @onclick="CancelForm">Отмена</button>
+        </div>
+    </div>
+}
+
+<div class="card mb-4" style="padding: 16px;">
+    <div class="flex gap-4 flex-wrap items-center">
+        <input type="text" class="form-control" style="flex:1; min-width:200px;" @bind="searchQuery" @bind:event="oninput" placeholder="🔍 Поиск..." />
+        <select class="form-select" style="flex:1; min-width:150px;" @bind="selectedGenre">
+            <option value="">Все жанры</option>
+            @if (genres != null)
+            {
+                foreach (var g in genres)
+                {
+                    <option value="@g.genreName">@g.genreName</option>
+                }
+            }
+        </select>
+        <select class="form-select" style="flex:1; min-width:150px;" @bind="sortBy">
+            <option value="title">По названию</option>
+            <option value="ratingDesc">По рейтингу ↓</option>
+            <option value="yearDesc">По году ↓</option>
+        </select>
+    </div>
+</div>
+
+@if (filteredMovies == null)
+{
+    <div class="text-center py-5">⏳ Загрузка...</div>
+}
+else if (!filteredMovies.Any())
+{
+    <div class="card text-center">😔 Фильмы не найдены</div>
+}
+else
+{
+    <div class="grid grid-cols-3">
+        @foreach (var m in filteredMovies)
+        {
+            <div class="card" style="padding:0; overflow:hidden;">
+                <div style="height:200px; background:#e2e8f0; overflow:hidden; cursor:pointer;" @onclick="() => ShowMovieDetails(m)">
+                    @if (!string.IsNullOrEmpty(m.posterUrl))
+                    {
+                        <img src="@m.posterUrl" style="width:100%; height:100%; object-fit:cover;" />
+                    }
+                    else
+                    {
+                        <div style="display:flex; align-items:center; justify-content:center; height:100%; font-size:3rem; color:#94a3b8;">🎬</div>
+                    }
+                </div>
+                <div style="padding:16px;">
+                    <h4 style="margin:0 0 4px;">@m.title</h4>
+                    <div style="color:var(--text-muted); font-size:0.9rem; margin-bottom:12px;">@m.genre • @m.releaseYear</div>
+                    <div class="flex justify-between items-center">
+                        <span style="font-weight:600; color:var(--warning);">★ @m.rating.ToString("0.0")</span>
+                        <div class="flex gap-2">
+                            @if (UserService.IsAdmin)
+                            {
+                                <button class="btn btn-sm btn-secondary" @onclick="() => EditMovie(m)">✏️</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => DeleteMovie(m.movieId)">🗑️</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (selectedMovie != null)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="modal-content" @onclick:stopPropagation="true" style="padding:0;">
+            <div style="padding:20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="margin:0;">@selectedMovie.title</h2>
+                <button class="btn btn-secondary" @onclick="CloseModal" style="padding:8px 12px;">✕</button>
+            </div>
+            <div style="padding:24px; display:flex; gap:24px; flex-wrap:wrap;">
+                <div style="flex:0 0 200px;">
+                    @if (!string.IsNullOrEmpty(selectedMovie.posterUrl))
+                    {
+                        <img src="@selectedMovie.posterUrl" style="width:100%; border-radius:var(--radius);" />
+                    }
+                    else
+                    {
+                        <div style="height:300px; background:#e2e8f0; border-radius:var(--radius); display:flex; align-items:center; justify-content:center; font-size:4rem;">🎬</div>
+                    }
+                </div>
+                <div style="flex:1; min-width:250px;">
+                    <div class="flex gap-2 mb-4">
+                        <span class="btn btn-sm btn-secondary">@selectedMovie.genre</span>
+                        <span class="btn btn-sm btn-secondary">@selectedMovie.releaseYear</span>
+                        <span class="btn btn-sm btn-secondary" style="color:var(--warning);">★ @selectedMovie.rating</span>
+                    </div>
+                    <p>@selectedMovie.description</p>
+                    <button class="btn btn-primary mt-4" @onclick="() => OpenChat(selectedMovie)" @onclick:stopPropagation="true">💬 Открыть чат</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showChat && selectedMovie != null)
+{
+    <div class="chat-overlay" @onclick="CloseChatOverlay">
+        <div class="chat-container" @onclick:stopPropagation="true">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--border); background: white;">
+                <h3 style="margin: 0;">💬 Чат: @selectedMovie.title</h3>
+                <button class="btn btn-secondary btn-sm" @onclick="CloseChat">✕ Закрыть</button>
+            </div>
+            <div style="flex: 1; overflow: hidden; height: calc(100% - 70px);">
+                @if (showChat)
+                {
+                    <ChatWindow MovieId="@selectedMovie.movieId"
+                                MovieTitle="@selectedMovie.title"
+                                OnClose="CloseChat"
+                                @key="selectedMovie.movieId" />
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+        .top-bar h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+    .grid {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .grid-cols-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .grid-cols-3 {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+
+    .card {
+        background: var(--card);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        border: 1px solid var(--border);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+        color: var(--text-muted);
+    }
+
+    .form-control, .form-select {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        background: #fff;
+        font-size: 1rem;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+        .form-control:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.6rem 1.2rem;
+        border-radius: 50px;
+        border: none;
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 0.95rem;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, var(--primary), var(--secondary));
+        color: white;
+        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+    }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+        }
+
+    .btn-secondary {
+        background: #e2e8f0;
+        color: var(--text);
+    }
+
+    .btn-danger {
+        background: var(--danger);
+        color: white;
+    }
+
+    .btn-sm {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+    }
+
+    .alert {
+        padding: 1rem 1.5rem;
+        border-radius: var(--radius);
+        margin-bottom: 1.5rem;
+        font-weight: 500;
+    }
+
+    .alert-success {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+    }
+
+    .alert-danger {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
+    }
+
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: var(--card);
+        border-radius: var(--radius-lg);
+        width: 90%;
+        max-width: 800px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: var(--shadow-lg);
+        animation: slideUp 0.3s ease;
+    }
+
+    .chat-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        padding: 20px;
+    }
+
+    .chat-container {
+        width: 100%;
+        max-width: 900px;
+        height: 85vh;
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+
+    @@keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .text-center {
+        text-align: center;
+    }
+
+    .py-5 {
+        padding: 3rem 0;
+    }
+
+    .mb-4 {
+        margin-bottom: 1.5rem;
+    }
+
+    .mt-4 {
+        margin-top: 1.5rem;
+    }
+
+    .flex {
+        display: flex;
+    }
+
+    .flex-wrap {
+        flex-wrap: wrap;
+    }
+
+    .items-center {
+        align-items: center;
+    }
+
+    .justify-between {
+        justify-content: space-between;
+    }
+
+    .gap-2 {
+        gap: 0.5rem;
+    }
+
+    .gap-4 {
+        gap: 1rem;
+    }
+</style>
+
+@code {
+    private List<Movie>? allMovies;
+    private List<Movie>? filteredMovies;
+    private List<Genre>? genres;
+    private Movie? selectedMovie;
+    private Movie form = new();
+    private string searchQuery = string.Empty;
+    private string selectedGenre = string.Empty;
+    private string sortBy = "title";
+    private string message = string.Empty;
+    private bool isSuccess;
+    private bool showForm;
+    private bool isEditing;
+    private bool showChat = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        var moviesResp = await MovieRequests.GetAllMoviesAsync();
+        allMovies = moviesResp.movies;
+        var genresResp = await MovieRequests.GetAllGenresAsync();
+        genres = genresResp.genres;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        if (allMovies == null) return;
+        var f = allMovies.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+            f = f.Where(m => m.title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(selectedGenre))
+            f = f.Where(m => m.genre == selectedGenre);
+        f = sortBy switch
+        {
+            "ratingDesc" => f.OrderByDescending(m => m.rating),
+            "yearDesc" => f.OrderByDescending(m => m.releaseYear),
+            _ => f.OrderBy(m => m.title)
+        };
+        filteredMovies = f.ToList();
+        StateHasChanged();
+    }
+
+    private void ShowMovieDetails(Movie movie)
+    {
+        selectedMovie = movie;
+        StateHasChanged();
+    }
+
+    private void CloseModal()
+    {
+        selectedMovie = null;
+        StateHasChanged();
+    }
+
+    private void ShowAddForm()
+    {
+        isEditing = false;
+        form = new Movie();
+        showForm = true;
+    }
+
+    private void EditMovie(Movie m)
+    {
+        isEditing = true;
+        form = new Movie
+        {
+            movieId = m.movieId,
+            title = m.title,
+            description = m.description,
+            genre = m.genre,
+            releaseYear = m.releaseYear,
+            rating = m.rating,
+            posterUrl = m.posterUrl
+        };
+        showForm = true;
+        StateHasChanged();
+    }
+
+    private void CancelForm()
+    {
+        showForm = false;
+        form = new Movie();
+    }
+
+    private void OpenChat(Movie movie)
+    {
+        selectedMovie = movie;
+        showChat = true;
+        StateHasChanged();
+    }
+
+    private void CloseChat()
+    {
+        showChat = false;
+        StateHasChanged();
+    }
+
+    private void CloseChatOverlay()
+    {
+    }
+
+    private async Task SaveMovie()
+    {
+        if (string.IsNullOrWhiteSpace(form.title) || string.IsNullOrWhiteSpace(form.genre))
+        {
+            message = "Заполните название и жанр";
+            isSuccess = false;
+            StateHasChanged();
+            return;
+        }
+        var result = isEditing ? await MovieRequests.UpdateMovieAsync(form.movieId, form) : await MovieRequests.AddMovieAsync(form);
+        message = result.message;
+        isSuccess = result.status;
+        if (isSuccess)
+        {
+            await LoadData();
+            CancelForm();
+        }
+        StateHasChanged();
+    }
+
+    private async Task DeleteMovie(int id)
+    {
+        var result = await MovieRequests.DeleteMovieAsync(id);
+        message = result.message;
+        isSuccess = result.status;
+        if (isSuccess)
+            await LoadData();
+        StateHasChanged();
+    }
+}

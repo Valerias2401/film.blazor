@@ -1,0 +1,34 @@
+﻿@page "/profile"
+@using Prilozshuha.ApiRequests.Services
+@inject UserService UserService
+@inject NavigationManager Navigation
+
+<PageTitle>Профиль</PageTitle>
+
+<div class="card" style="max-width: 600px; margin: 40px auto; padding: 32px;">
+    <div class="flex items-center gap-4 mb-4">
+        <div style="width:80px; height:80px; background:linear-gradient(135deg, var(--primary), var(--secondary)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; color:white;">
+            👤
+        </div>
+        <div>
+            <h2 style="margin:0;">@UserService.CurrentUser?.Name</h2>
+            <p style="margin:0; color:var(--text-muted);">@UserService.CurrentUser?.Role</p>
+        </div>
+    </div>
+
+    <div style="background:#f8fafc; padding:20px; border-radius:var(--radius); margin-bottom:20px;">
+        <div class="mb-4"><strong>ID:</strong> @UserService.CurrentUser?.id_User</div>
+        <div class="mb-4"><strong>Email:</strong> @UserService.CurrentUser?.Email</div>
+        <div><strong>О себе:</strong> @UserService.CurrentUser?.Description</div>
+    </div>
+
+    <button class="btn btn-danger" @onclick="Logout">🚪 Выйти из аккаунта</button>
+</div>
+
+@code {
+    private void Logout()
+    {
+        UserService.ClearCurrentUser();
+        Navigation.NavigateTo("/login");
+    }
+}

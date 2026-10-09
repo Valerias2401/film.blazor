@@ -1,0 +1,315 @@
+﻿@page "/userschat"
+@using Prilozshuha.ApiRequests
+@using Prilozshuha.ApiRequests.Models
+@using Prilozshuha.ApiRequests.Services
+@inject ApiRequestService ApiRequests
+@inject ChatService ChatService
+@inject UserService UserService
+@implements IDisposable
+
+<PageTitle>Пользователи</PageTitle>
+
+<div class="top-bar">
+    <h1>💬 Чаты с пользователями</h1>
+</div>
+
+@if (users == null)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p>Загрузка пользователей...</p>
+    </div>
+}
+else if (users.Count == 0)
+{
+    <div class="alert alert-info text-center">
+        😕 Пользователи не найдены
+    </div>
+}
+else
+{
+    <div class="user-list">
+        @foreach (var user in users)
+        {
+            if (user.id_User == UserService.CurrentUser?.id_User) continue;
+
+            <div class="user-card" @onclick="() => OpenPrivateChat(user)">
+                <div class="user-avatar">
+                    <img src="https://ui-avatars.com/api/?name=@Uri.EscapeDataString(user.Name)&background=6366f1&color=fff&bold=true" alt="@user.Name" />
+                </div>
+                <div class="user-info">
+                    <div class="user-name">
+                        @user.Name
+                        @if (user.Role?.ToLower() == "admin")
+                        {
+                            <span class="admin-badge">👑 Администратор</span>
+                        }
+                        else
+                        {
+                            <span class="user-badge">👤 Пользователь</span>
+                        }
+                    </div>
+                    <div class="user-email">@user.Email</div>
+                    <div class="user-status @(ChatService.IsUserOnline(user.id_User) ? "online" : "offline")">
+                        @(ChatService.IsUserOnline(user.id_User) ? "🟢 В сети" : "⚪ Не в сети")
+                    </div>
+                </div>
+                <div class="chat-icon">💬</div>
+            </div>
+        }
+    </div>
+}
+
+@if (showPrivateChat && selectedUser != null)
+{
+    <div class="chat-overlay" @onclick="ClosePrivateChat">
+        <div class="chat-container" @onclick:stopPropagation="true">
+            <PrivateChatWindow WithUserId="@selectedUser.id_User"
+                               WithUserName="@selectedUser.Name"
+                               OnClose="ClosePrivateChat"
+                               @key="selectedUser.id_User" />
+        </div>
+    </div>
+}
+
+<style>
+    .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+        .top-bar h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+    .user-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .user-card {
+        display: flex;
+        align-items: center;
+        padding: 1.2rem;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid #e2e8f0;
+    }
+
+        .user-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            border-color: #6366f1;
+        }
+
+    .user-avatar img {
+        width: 55px;
+        height: 55px;
+        border-radius: 50%;
+        margin-right: 1rem;
+        object-fit: cover;
+    }
+
+    .user-info {
+        flex: 1;
+    }
+
+    .user-name {
+        font-weight: 700;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+    }
+
+    .admin-badge {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: normal;
+    }
+
+    .user-badge {
+        background: #e2e8f0;
+        color: #475569;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-weight: normal;
+    }
+
+    .user-email {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-bottom: 4px;
+    }
+
+    .user-status {
+        font-size: 0.8rem;
+    }
+
+    .online {
+        color: #10b981;
+    }
+
+    .offline {
+        color: #94a3b8;
+    }
+
+    .chat-icon {
+        font-size: 1.8rem;
+        opacity: 0.5;
+        transition: opacity 0.2s;
+    }
+
+    .user-card:hover .chat-icon {
+        opacity: 1;
+    }
+
+    .chat-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        padding: 20px;
+    }
+
+    .chat-container {
+        width: 100%;
+        max-width: 900px;
+        height: 85vh;
+        background: white;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+
+    .text-center {
+        text-align: center;
+    }
+
+    .py-5 {
+        padding: 3rem 0;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 1rem;
+    }
+
+    .alert-info {
+        background: #e0e7ff;
+        color: #3730a3;
+        border: 1px solid #c7d2fe;
+    }
+</style>
+
+@code {
+    private List<UserDataShort>? users;
+    private bool showPrivateChat = false;
+    private UserDataShort? selectedUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+
+        ChatService.OnOnlineUsersUpdated += OnOnlineUsersUpdated;
+        ChatService.OnUserOnline += OnUserOnlineOffline;
+        ChatService.OnUserOffline += OnUserOnlineOffline;
+    }
+
+    private void OnOnlineUsersUpdated() => InvokeAsync(StateHasChanged);
+    private void OnUserOnlineOffline(int _) => InvokeAsync(StateHasChanged);
+
+    private async Task LoadUsers()
+    {
+        try
+        {
+            Console.WriteLine("Загрузка пользователей...");
+            var resp = await ApiRequests.GetAllUsersAsync();
+            Console.WriteLine($"Ответ получен: status={resp?.status}");
+
+            if (resp?.data?.users != null)
+            {
+                users = resp.data.users;
+                Console.WriteLine($"Загружено пользователей: {users.Count}");
+
+                foreach (var u in users)
+                {
+                    Console.WriteLine($"User: id={u.id_User}, name={u.Name}, role={u.Role}, email={u.Email}");
+                }
+
+                var admins = users.Where(u => u.Role?.ToLower() == "admin").ToList();
+                Console.WriteLine($"Из них админов: {admins.Count}");
+
+                if (admins.Count == 0)
+                {
+                    Console.WriteLine("ВНИМАНИЕ: Админы не найдены в списке!");
+                }
+            }
+            else
+            {
+                users = new List<UserDataShort>();
+                Console.WriteLine("Пользователи не найдены");
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка загрузки пользователей: {ex.Message}");
+            users = new List<UserDataShort>();
+        }
+    }
+
+    private async Task OpenPrivateChat(UserDataShort user)
+    {
+        Console.WriteLine($"Открытие чата с: {user.Name} (id={user.id_User}, role={user.Role})");
+
+        if (!ChatService.IsConnected)
+        {
+            ChatService.SetCurrentUserId(UserService.CurrentUser.id_User);
+            await ChatService.Connect();
+            await Task.Delay(500);
+        }
+
+        selectedUser = user;
+        showPrivateChat = true;
+        StateHasChanged();
+    }
+
+    private async Task ClosePrivateChat()
+    {
+        showPrivateChat = false;
+        selectedUser = null;
+        ChatService.ClearMessages(); 
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        ChatService.OnOnlineUsersUpdated -= OnOnlineUsersUpdated;
+        ChatService.OnUserOnline -= OnUserOnlineOffline;
+        ChatService.OnUserOffline -= OnUserOnlineOffline;
+    }
+}
